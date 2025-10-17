@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div>
+    <img class="poster w-full object-cover"
+         src="https://image.tmdb.org/t/p/w500{{ movie.poster_path }}" alt="{{ movie.title }}">
+    {% if movie.videos.results %}
+      {% set yt = (movie.videos.results | selectattr('site','equalto','YouTube') | list) %}
+      {% if yt %}
+        <button id="watchTrailer" data-key="{{ yt[0].key }}"
+                class="w-full mt-3 bg-red-600 hover:bg-red-500 rounded-xl px-4 py-2">Fragmanı izle</button>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="md:col-span-2">
+    <h1 class="text-3xl font-bold">{{ movie.title }}</h1>
+    <div class="mt-2 flex gap-2 flex-wrap">
+      {% for g in movie.genres %}<span class="chip">{{ g.name }}</span>{% endfor %}
+      {% if movie.runtime %}<span class="chip">{{ movie.runtime }} dk</span>{% endif %}
+      {% if movie.vote_average %}<span class="chip">Puan {{ '%.1f'|format(movie.vote_average) }}</span>{% endif %}
+    </div>
+    <p class="mt-4 text-slate-200">{{ movie.overview }}</p>
+
+    <div class="mt-6 bg-slate-800/50 rounded-2xl p-4">
+      {% if stats.total %}
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="text-lg">
+            <b>Beğenilme:</b>
+            <span class="text-emerald-400 font-semibold">{{ '%.1f'|format(stats.like_pct) }}%</span>
+            <span class="text-slate-400 text-sm">({{ stats.total }} yorum)</span>
+          </div>
+          <div class="chip">Olumlu: {{ stats.pos }}</div>
+          <div class="chip">Olumsuz: {{ stats.neg }}</div>
+          <div class="chip">Nötr: {{ stats.neu }}</div>
+        </div>
+      {% else %}
+        <div class="text-slate-400">Henüz yorum yok. İlk yorumu sen yaz!</div>
+      {% endif %}
+    </div>
+
+    <h3 class="text-xl font-bold mt-6 mb-2">Benzer Filmler</h3>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {% for r in recs.results[:8] %}
+      <a href="/movie/{{ r.id }}" class="group">
+        <img class="poster w-full aspect-[2/3] object-cover"
+             src="https://image.tmdb.org/t/p/w500{{ r.poster_path }}">
+        <div class="mt-1 text-sm group-hover:text-sky-400">{{ r.title }}</div>
+      </a>
+      {% endfor %}
+    </div>
+
+    <h3 class="text-2xl font-bold mt-8 mb-3">Filme Yorum Yaz</h3>
+    {% if user %}
+      <form method="post" action="/movie/{{ movie.id }}/comment" class="space-y-3">
+        <textarea name="content" rows="4" class="w-full bg-slate-800/60 rounded-xl px-3 py-2"
+                  placeholder="Yorumunuz"></textarea>
+        <label class="inline-flex items-center gap-2">
+          <input type="checkbox" name="is_spoiler" class="accent-sky-500">
+          <span>Yorum spoiler içeriyorsa işaretleyin</span>
+        </label>
+        <div>
+          <button class="bg-sky-600 hover:bg-sky-500 rounded-xl px-4 py-2">Gönder</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="bg-slate-800/60 rounded-xl p-4">
+        Yorum yazmak için <a class="text-sky-400 underline" href="/login?next={{ request.path }}">giriş yapın</a>.
+      </div>
+    {% endif %}
+
+    <h3 class="text-2xl font-bold mt-8 mb-3">Film Yorumları</h3>
+    {% if comments %}
+      <div class="space-y-3">
+        {% for c in comments %}
+          <div class="bg-slate-800/50 rounded-xl p-3">
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-400">
+                {{ c['username'] }} • {{ c['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}
+              </div>
+
+              {% if c['sentiment_label'] %}
+                {% set lab = c['sentiment_label'] %}
+                <span class="chip {% if lab=='POS' %} bg-emerald-600/50 {% elif lab=='NEG' %} bg-rose-600/50 {% else %} bg-slate-600/50 {% endif %}">
+                  {% if lab=='POS' %}Olumlu{% elif lab=='NEG' %}Olumsuz{% else %}Nötr{% endif %}
+                </span>
+              {% endif %}
+            </div>
+            {% if c['is_spoiler'] %}
+              <details class="mt-1">
+                <summary class="cursor-pointer text-amber-300">Spoiler içerik – görmek için tıklayın</summary>
+                <p class="mt-2">{{ c['content'] }}</p>
+              </details>
+            {% else %}
+              <p class="mt-1">{{ c['content'] }}</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-slate-400">Bu film için henüz yorum yok.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-3">Arama: “{{ q }}”</h2>
+<div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-5">
+  {% for m in results.results %}
+  <a href="/movie/{{ m.id }}" class="group">
+    <img class="poster w-full aspect-[2/3] object-cover"
+         src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}">
+    <div class="mt-2">
+      <div class="font-semibold group-hover:text-sky-400">{{ m.title }}</div>
+      <div class="text-slate-400 text-sm">{{ (m.release_date or '')[:4] }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% if results.total_pages > 1 %}
+<div class="mt-6 flex gap-2">
+  {% if results.page > 1 %}
+    <a class="px-3 py-1 bg-slate-700/70 rounded-lg" href="?q={{ q }}&page={{ results.page-1 }}">Önceki</a>
+  {% endif %}
+  <span class="text-slate-400 px-2 py-1">Sayfa {{ results.page }} / {{ results.total_pages }}</span>
+  {% if results.page < results.total_pages %}
+    <a class="px-3 py-1 bg-slate-700/70 rounded-lg" href="?q={{ q }}&page={{ results.page+1 }}">Sonraki</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
