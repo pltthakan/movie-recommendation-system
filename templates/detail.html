@@ -11,10 +11,54 @@
                 class="w-full mt-3 bg-red-600 hover:bg-red-500 rounded-xl px-4 py-2">Fragmanı izle</button>
       {% endif %}
     {% endif %}
+
+    {% if user %}
+      <!-- Like / Dislike -->
+      <div class="mt-3 flex items-center gap-2">
+        <form method="post" action="/movie/{{ movie.id }}/rate">
+          <input type="hidden" name="value" value="like">
+          <button class="px-3 py-1 rounded-lg
+                         {% if rating_state.my == 1 %} bg-emerald-600/60 hover:bg-emerald-600
+                         {% else %} bg-slate-700/70 hover:bg-slate-600 {% endif %}">
+            👍 Beğendim ({{ rating_state.likes }})
+          </button>
+        </form>
+
+        <form method="post" action="/movie/{{ movie.id }}/rate">
+          <input type="hidden" name="value" value="dislike">
+          <button class="px-3 py-1 rounded-lg
+                         {% if rating_state.my == -1 %} bg-rose-600/60 hover:bg-rose-600
+                         {% else %} bg-slate-700/70 hover:bg-slate-600 {% endif %}">
+            👎 Beğenmedim ({{ rating_state.dislikes }})
+          </button>
+        </form>
+      </div>
+    {% else %}
+      <div class="mt-3 text-sm text-slate-400">
+        Beğenmek için <a class="text-sky-400 underline" href="/login?next={{ request.path }}">giriş yapın</a>.
+      </div>
+    {% endif %}
   </div>
 
   <div class="md:col-span-2">
-    <h1 class="text-3xl font-bold">{{ movie.title }}</h1>
+    <div class="flex items-center gap-3 flex-wrap">
+      <h1 class="text-3xl font-bold">{{ movie.title }}</h1>
+
+      {% if user %}
+        <form method="post" action="/movie/{{ movie.id }}/favorite">
+          <button class="px-3 py-1 rounded-lg
+                         {% if fav_state.is_favorite %} bg-emerald-600/60 hover:bg-emerald-600
+                         {% else %} bg-slate-700/70 hover:bg-slate-600 {% endif %}">
+            {% if fav_state.is_favorite %}❤ Favoride{% else %}♡ Favorilere ekle{% endif %}
+          </button>
+        </form>
+      {% else %}
+        <a href="/login?next={{ request.path }}" class="text-sky-400 underline text-sm">
+          Favorilere eklemek için giriş yapın
+        </a>
+      {% endif %}
+    </div>
+
     <div class="mt-2 flex gap-2 flex-wrap">
       {% for g in movie.genres %}<span class="chip">{{ g.name }}</span>{% endfor %}
       {% if movie.runtime %}<span class="chip">{{ movie.runtime }} dk</span>{% endif %}
@@ -76,7 +120,7 @@
           <div class="bg-slate-800/50 rounded-xl p-3">
             <div class="flex items-center justify-between">
               <div class="text-sm text-slate-400">
-                {{ c['username'] }} • {{ c['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}
+                {{ c['username'] }} • {{ c['created_at_str'] }}
               </div>
 
               {% if c['sentiment_label'] %}

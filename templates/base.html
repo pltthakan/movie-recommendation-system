@@ -12,19 +12,34 @@
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:1rem;}
     .modal.open{display:flex;}
     .modal > div{width:min(100%,900px);aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+
+    /* Canlı arama öneri listesi */
+    .suggest-item{display:flex;gap:.75rem;padding:.6rem .75rem;border-radius:.75rem;align-items:center}
+    .suggest-item:hover,.suggest-item.active{background:rgba(255,255,255,.06)}
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100">
   <header class="bg-slate-800/70 backdrop-blur sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
       <a href="/" class="text-xl font-semibold text-sky-400">FullHDFilm (Demo)</a>
+
       <nav class="hidden md:flex gap-5 text-slate-300">
         <a class="hover:text-white" href="/">Film izle</a>
         <a class="hover:text-white" href="/search?q=">Listeler</a>
+        {% if user %}
+          <a class="hover:text-white" href="/favorites">Favoriler</a>
+        {% endif %}
       </nav>
-      <form action="/search" class="ml-auto w-full max-w-md">
-        <input name="q" value="{{ request.args.get('q','') }}" placeholder="Film adı veya IMDB linki girin"
+
+      <!-- Arama formu + canlı öneri paneli -->
+      <form id="siteSearchForm" action="/search" class="relative ml-auto w-full max-w-md">
+        <input id="siteSearchInput" name="q"
+               value="{{ request.args.get('q','') }}"
+               placeholder="Film adı veya IMDB linki girin"
                class="w-full rounded-xl bg-slate-700/70 px-4 py-2 outline-none placeholder-slate-400">
+        <div id="searchSuggest"
+             class="hidden absolute left-0 right-0 mt-2 rounded-xl bg-slate-800/95 backdrop-blur
+                    shadow-xl border border-slate-700 max-h-[70vh] overflow-auto z-[60]"></div>
       </form>
 
       {% if user %}
@@ -52,6 +67,7 @@
     {% block content %}{% endblock %}
   </main>
 
+  <!-- Trailer modal -->
   <div id="trailerModal" class="modal">
     <div>
       <iframe id="trailerFrame" width="100%" height="100%" frameborder="0"
