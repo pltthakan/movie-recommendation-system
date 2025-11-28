@@ -1,49 +1,93 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-  <section class="lg:col-span-3">
-  <!-- ▼ Film Robotu sonuçları (ana alan) -->
-  <div id="discoverFull" class="hidden">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-2xl font-bold">Sonuçlar</h2>
-      <button id="discoverClose" class="px-3 py-1 rounded-lg bg-slate-700/70 hover:bg-slate-600">
-        Kapat
-      </button>
-    </div>
-    <div id="discoverFullGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
 
-    <div class="flex justify-between items-center mt-3" id="discoverFullPager" hidden>
-      <button class="px-3 py-1 bg-slate-700/70 rounded-lg" data-dir="-1">Önceki</button>
-      <span id="discoverFullInfo" class="text-sm text-slate-400"></span>
-      <button class="px-3 py-1 bg-slate-700/70 rounded-lg" data-dir="1">Sonraki</button>
-    </div>
+  <!-- ANA SÜTUN -->
+  <section class="lg:col-span-3 space-y-8">
 
-    <hr class="my-6 border-slate-700">
-  </div>
-
-  <!-- ▼ Yeni Filmler (gizlenecek blok) -->
-  <div id="newMovies">
-    <h2 class="text-2xl font-bold mb-3">Yeni Filmler</h2>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      {% for m in yeni.results %}
-      <a href="/movie/{{ m.id }}" class="group">
-        <img class="poster w-full aspect-[2/3] object-cover"
-             src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}" alt="{{ m.title }}">
-        <div class="mt-2">
-          <div class="flex items-center justify-between">
-            <h3 class="font-semibold group-hover:text-sky-400">{{ m.title }}</h3>
-            {% if m.vote_average %}<span class="chip">{{ '%.1f'|format(m.vote_average) }}</span>{% endif %}
-          </div>
-          <p class="text-slate-400 text-sm">{{ (m.release_date or '')[:4] }}</p>
+    <!-- ▼ ÖNE ÇIKAN FİLMLER (CAROUSEL) -->
+    <div class="relative">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-2xl font-bold">Öne Çıkan Filmler</h2>
+        <div class="flex gap-2">
+          <button id="featPrev" class="rounded-xl bg-slate-800/60 hover:bg-slate-700 px-3 py-2" aria-label="Önceki">‹</button>
+          <button id="featNext" class="rounded-xl bg-slate-800/60 hover:bg-slate-700 px-3 py-2" aria-label="Sonraki">›</button>
         </div>
-      </a>
-      {% endfor %}
+      </div>
+
+      <div id="featuredRow"
+           class="scrollbar-hide snap-x overflow-x-auto grid grid-flow-col auto-cols-[70%] md:auto-cols-[45%] xl:auto-cols-[30%] gap-5 pr-2">
+        <!-- JS dolduracak -->
+      </div>
     </div>
-  </div>
-</section>
 
+    <!-- ▼ Film Robotu sonuçları (ana alan) -->
+    <div id="discoverFull" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-2xl font-bold">Sonuçlar</h2>
+        <button id="discoverClose" class="px-3 py-1 rounded-lg bg-slate-700/70 hover:bg-slate-600">
+          Kapat
+        </button>
+      </div>
 
+      <div id="discoverFullGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+      <div class="flex justify-between items-center mt-3" id="discoverFullPager" hidden>
+        <button class="px-3 py-1 bg-slate-700/70 rounded-lg" data-dir="-1">Önceki</button>
+        <span id="discoverFullInfo" class="text-sm text-slate-400"></span>
+        <button class="px-3 py-1 bg-slate-700/70 rounded-lg" data-dir="1">Sonraki</button>
+      </div>
+
+      <hr class="my-6 border-slate-700">
+    </div>
+
+    <!-- ▼ SIZE ÖZEL ÖNERİLER -->
+    {% if user %}
+      <div id="personalizedBlock" class="mb-2">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-2xl font-bold">Size Özel Film Önerileri</h2>
+          <div id="personalizedInfo" class="text-sm text-slate-400"></div>
+        </div>
+
+        <div id="personalizedGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div class="text-slate-400">Yükleniyor...</div>
+        </div>
+
+        <hr class="my-6 border-slate-700">
+      </div>
+    {% else %}
+      <div class="mb-2 bg-slate-800/40 rounded-2xl p-4 backdrop-blur border border-slate-700/30">
+        <div class="text-slate-300">
+          <b>Size özel öneriler</b> için giriş yapın: beğendiğiniz / favorilediğiniz filmlere göre öneri üreteceğiz.
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- ▼ Yeni Filmler -->
+    <div id="newMovies">
+      <h2 class="text-2xl font-bold mb-3">Yeni Filmler</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {% for m in yeni.results %}
+        <a href="/movie/{{ m.id }}" class="group card-3d">
+          <img class="poster w-full aspect-[2/3] object-cover"
+               src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}" alt="{{ m.title }}">
+          <div class="mt-2">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold group-hover:text-sky-400 truncate">{{ m.title }}</h3>
+              {% if m.vote_average %}<span class="chip">{{ '%.1f'|format(m.vote_average) }}</span>{% endif %}
+            </div>
+            <p class="text-slate-400 text-sm">{{ (m.release_date or '')[:4] }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+  </section>
+
+  <!-- YAN SÜTUN -->
   <aside class="lg:col-span-1 space-y-6">
+
     <div>
       <h2 class="text-xl font-bold mb-3">Trend Filmler</h2>
       <div class="space-y-3">
@@ -61,27 +105,40 @@
     </div>
 
     <div class="bg-slate-800/60 rounded-2xl p-4">
-      <h2 class="text-xl font-bold mb-4">Film Robotu</h2>
+      <h2 class="text-xl font-bold mb-4">Film Tercihi</h2>
+
       <div class="space-y-3">
         <select id="genre" class="w-full bg-slate-700/70 rounded-lg px-3 py-2">
           <option value="">Film Türü</option>
-          {% for g in genres %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
+          {% for g in genres %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
         </select>
+
         <select id="year" class="w-full bg-slate-700/70 rounded-lg px-3 py-2">
           <option value="">Film Yılı</option>
-          {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+          {% for y in years %}
+            <option value="{{ y }}">{{ y }}</option>
+          {% endfor %}
         </select>
+
         <select id="sort" class="w-full bg-slate-700/70 rounded-lg px-3 py-2">
           <option value="popularity.desc">Sıralama: Popüler</option>
           <option value="vote_average.desc">Sıralama: Puan</option>
           <option value="release_date.desc">Sıralama: Yeni</option>
         </select>
+
         <select id="vote" class="w-full bg-slate-700/70 rounded-lg px-3 py-2">
           <option value="">IMDB Puanı</option>
-          <option value="9">9+</option><option value="8">8+</option>
-          <option value="7">7+</option><option value="6">6+</option>
+          <option value="9">9+</option>
+          <option value="8">8+</option>
+          <option value="7">7+</option>
+          <option value="6">6+</option>
         </select>
-        <button id="fetchBtn" class="w-full bg-sky-600 hover:bg-sky-500 rounded-xl py-2">Filmleri Getir</button>
+
+        <button id="fetchBtn" class="w-full bg-sky-600 hover:bg-sky-500 rounded-xl py-2">
+          Filmleri Getir
+        </button>
       </div>
 
       <div id="discover" class="mt-4 grid sm:grid-cols-2 gap-4"></div>
@@ -91,6 +148,7 @@
         <button class="px-3 py-1 bg-slate-700/70 rounded-lg" data-dir="1">Sonraki</button>
       </div>
     </div>
+
   </aside>
 </div>
 {% endblock %}

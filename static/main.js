@@ -1,3 +1,4 @@
+// ----------------- yardımcılar -----------------
 async function fetchJson(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -9,7 +10,7 @@ function movieCard(m) {
   const year = (m.release_date || "").slice(0, 4);
   const score = (m.vote_average != null) ? `<span class="chip">${m.vote_average.toFixed(1)}</span>` : "";
   return `
-    <a href="/movie/${m.id}" class="group">
+    <a href="/movie/${m.id}" class="group card-3d">
       <img class="poster w-full aspect-[2/3] object-cover" src="${img}">
       <div class="mt-2 flex items-center justify-between">
         <div class="font-semibold group-hover:text-sky-400 truncate">${m.title}</div>
@@ -25,7 +26,89 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+// ----------------- Öne Çıkanlar (carousel) -----------------
+function featCard(m) {
+  const img = m.backdrop_path
+    ? `https://image.tmdb.org/t/p/w780${m.backdrop_path}`
+    : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "");
+  const year = (m.release_date || "").slice(0,4);
+  const score = (m.vote_average != null) ? m.vote_average.toFixed(1) : "";
+  return `
+    <a href="/movie/${m.id}" class="group snap-start rounded-2xl overflow-hidden bg-slate-800/50 border border-slate-700/40 card-3d">
+      <div class="relative">
+        <img src="${img}" class="w-full aspect-[16/9] object-cover" loading="lazy">
+        ${score ? `<div class="absolute top-2 right-2 chip bg-slate-900/60">⭐ ${score}</div>` : ""}
+      </div>
+      <div class="p-3">
+        <div class="font-semibold group-hover:text-sky-400 truncate">${m.title}</div>
+        <div class="text-slate-400 text-sm">${year || ""}</div>
+      </div>
+    </a>
+  `;
+}
+
+async function loadFeatured() {
+  const row = document.getElementById("featuredRow");
+  if (!row) return;
+  try {
+    const data = await fetchJson("/api/featured");
+    const items = (data.results || []).slice(0, 12);
+    row.innerHTML = items.map(featCard).join("");
+  } catch (e) {
+    // sessiz geç
+  }
+}
+
+function bindFeaturedArrows() {
+  const row = document.getElementById("featuredRow");
+  const prev = document.getElementById("featPrev");
+  const next = document.getElementById("featNext");
+  if (!row || !prev || !next) return;
+
+  const step = () => Math.max(320, row.clientWidth * 0.85);
+
+  prev.addEventListener("click", () => row.scrollBy({ left: -step(), behavior: "smooth" }));
+  next.addEventListener("click", () => row.scrollBy({ left:  step(), behavior: "smooth" }));
+
+  row.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      row.scrollLeft += e.deltaY;
+    }
+  }, { passive:false });
+}
+
+// ----------------- Size Özel Öneriler -----------------
+async function loadPersonalized() {
+  const grid = document.getElementById("personalizedGrid");
+  const info = document.getElementById("personalizedInfo");
+  if (!grid) return;
+
+  try {
+    const data = await fetchJson("/api/personalized");
+    const items = (data.results || []).slice(0, 9);
+
+    if (!items.length) {
+      grid.innerHTML = `<div class="text-slate-400">Henüz yeterli sinyal yok. Birkaç film beğen / favorile / fragman izle 😊</div>`;
+      return;
+    }
+
+    grid.innerHTML = items.map(movieCard).join("");
+    if (info) info.textContent = "Beğenilerinize göre";
+  } catch (e) {
+    // giriş yoksa veya model yoksa sessiz geç
+  }
+}
+
+// ----------------- Sayfa hazır -----------------
 document.addEventListener("DOMContentLoaded", () => {
+  // Öne çıkanlar
+  loadFeatured();
+  bindFeaturedArrows();
+
+  // Size özel öneriler
+  loadPersonalized();
+
   // ----- FILTRE ELEMANLARI -----
   const btn  = document.getElementById("fetchBtn");
   const genre = document.getElementById("genre");
@@ -189,10 +272,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const frame = document.getElementById("trailerFrame");
   if (tbtn && modal && frame) {
     const key = tbtn.getAttribute("data-key");
+    const mid = tbtn.getAttribute("data-movie-id");
+
     tbtn.addEventListener("click", () => {
+      // zayıf sinyal: trailer izleme/klik
+      if (mid) {
+        fetch("/api/trailer_event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ movie_id: parseInt(mid, 10) })
+        }).catch(()=>{});
+      }
+
       frame.src = `https://www.youtube.com/embed/${key}?autoplay=1`;
       modal.classList.add("open");
     });
+
     modal.addEventListener("click", (e) => {
       if (e.target === modal) {
         frame.src = "";
