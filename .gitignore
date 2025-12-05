@@ -1,0 +1,19 @@
+# Sanal ortam
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ortam değişkenleri
+.env
+
+# SQLite veritabanı (istersen takip etme)
+*.db
+
+# IDE ayarları
+.idea/
+.vscode/

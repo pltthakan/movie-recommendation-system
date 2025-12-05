@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Favorilerim</h1>
+
+{% if movies %}
+  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    {% for m in movies %}
+      <a href="/movie/{{ m.id }}" class="group">
+        <img class="poster w-full aspect-[2/3] object-cover"
+             src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}" alt="{{ m.title }}">
+        <div class="mt-2 flex items-center justify-between">
+          <div class="font-semibold group-hover:text-sky-400 truncate">{{ m.title }}</div>
+          {% if m.vote_average %}<span class="chip">{{ '%.1f'|format(m.vote_average) }}</span>{% endif %}
+        </div>
+        <div class="text-slate-400 text-sm">{{ (m.release_date or '')[:4] }}</div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="text-slate-400">Henüz favori eklemediniz.</div>
+{% endif %}
+{% endblock %}

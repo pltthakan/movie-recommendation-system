@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-4">Kayıt Ol</h1>
+<form method="post" class="max-w-md space-y-3">
+  <input name="username" placeholder="Kullanıcı adı" class="w-full bg-slate-800/60 rounded-xl px-3 py-2">
+  <input name="email" type="email" placeholder="E-posta" class="w-full bg-slate-800/60 rounded-xl px-3 py-2">
+  <input name="password" type="password" placeholder="Şifre" class="w-full bg-slate-800/60 rounded-xl px-3 py-2">
+  <button class="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-4 py-2">Kayıt ol</button>
+</form>
+<p class="mt-4 text-slate-400">Zaten hesabın var mı? <a class="text-sky-400 underline" href="/login">Giriş yap</a></p>
+{% endblock %}
