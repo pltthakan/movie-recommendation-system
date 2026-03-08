@@ -11,12 +11,17 @@ from .blueprints.pages import bp as pages_bp
 from .blueprints.auth import bp as auth_bp
 from .blueprints.api import bp as api_bp
 
+from .logging_config import setup_logging   # ← bunu zaten eklemiştin
+
+
 def create_app():
     load_dotenv()
 
     app = Flask(__name__, template_folder="templates", static_folder="static")
     load_config(app)
     app.secret_key = app.config["SECRET_KEY"]
+
+    setup_logging(app)
 
     warnings.filterwarnings(
         "ignore",
