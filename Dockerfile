@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SENTENCE_TRANSFORMERS_HOME=/models
 
 WORKDIR /app
-
+Ş
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential gcc \
       curl \
