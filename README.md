@@ -1,353 +1,326 @@
-## Film İzleme & Kişiselleştirilmiş Film Öneri Sistemi (Web Uygulaması)
+# 🎬 Movie Discovery & Personalized Recommendation System (Web App)
 
-**Hazırlayan:** Hakan Polat
-**Proje Adı:** BitirmeProjesi
-**Teknoloji:** Flask + PostgreSQL + TMDB API + (Embedding tabanlı öneri)
-**Çalıştırma:** Docker Compose (web + db)
-
----
-
-## İçindekiler
-
-1. Proje Özeti
-2. Problem Tanımı ve Motivasyon
-3. Hedefler ve Başarı Kriterleri
-4. Kapsam ve Varsayımlar
-5. Kullanılan Teknolojiler
-6. Genel Mimari
-7. Modüller ve Katmanlar
-8. Veritabanı Tasarımı
-9. API (REST) Tasarımı ve Kullanımı
-10. Öneri Sistemi Nasıl Çalışır?
-11. Cache ve Performans Yaklaşımı
-12. Loglama ve İzlenebilirlik
-13. Güvenlik ve Kimlik Doğrulama
-14. Test Süreci (Selenium + Pytest)
-15. Kurulum ve Çalıştırma
-16. Sonuç
+**Author:** Hakan Polat
+**Project Name:** BitirmeProjesi
+**Tech Stack:** Flask + PostgreSQL + TMDB API + Embedding-based Recommendation
+**Deployment:** Docker Compose (web + db)
 
 ---
 
-# 1) Proje Özeti
+## Table of Contents
 
-Bu proje, kullanıcıların film keşfetmesini kolaylaştıran ve kullanıcının etkileşimlerine göre **kişiselleştirilmiş film önerileri** sunabilen bir web uygulamasıdır. Uygulama; TMDB (The Movie Database) üzerinden film verilerini çeker, kullanıcı kayıt/giriş işlemlerini yönetir, favoriler/puanlama/fragman izleme etkileşimlerini toplar ve bu sinyalleri kullanarak embedding tabanlı öneriler üretir.
-
-Projenin temel çıktıları:
-
-* Film arama & listeleme
-* Film detay sayfası
-* Favorilere ekleme
-* Puanlama (beğen / beğenme vb.)
-* Fragman izleme olayı kaydı
-* **Kişiselleştirilmiş öneri** (benzerlik/embedding yaklaşımı)
-* Docker ile kolay kurulum
-* Loglama + UI test altyapısı
-
----
-
-# 2) Problem Tanımı ve Motivasyon
-
-Günümüzde içerik platformlarında film seçmek zorlaşmıştır. Kullanıcılar çok fazla seçenek arasında kaybolur. Bu proje, şu problemleri hedefler:
-
-* **Keşif zorluğu:** Kullanıcının ilgisine göre film bulmanın zor olması
-* **Kişiselleştirme eksikliği:** Her kullanıcıya aynı listelerin sunulması
-* **Kullanıcı sinyallerini değerlendirememe:** Favori/izleme/puan gibi veriler varken öneriye dönüşmemesi
-
-Motivasyon: Kullanıcının küçük etkileşimleri bile (favori, puan, fragman) öneri kalitesini artırmak için değerlendirilebilir.
+1. Project Overview
+2. Problem Statement & Motivation
+3. Goals & Success Criteria
+4. Scope & Assumptions
+5. Technologies Used
+6. Architecture Overview
+7. Modules & Layers
+8. Database Design
+9. REST API Design & Usage
+10. How the Recommendation System Works
+11. Caching & Performance Strategy
+12. Logging & Observability
+13. Security & Authentication
+14. Testing (Selenium + Pytest)
+15. Setup & Run
+16. Conclusion
 
 ---
 
-# 3) Hedefler ve Başarı Kriterleri
+# 1) Project Overview
 
-## Hedefler
+This project is a web application that helps users discover movies and provides **personalized recommendations** based on user interactions.
 
-* Kullanıcıların film arayabilmesi ve detay görebilmesi
-* Kullanıcıların etkileşimlerini (favori, puan, fragman) kaydedebilmesi
-* Bu sinyallerden kullanıcı profili çıkarıp öneri üretebilmek
-* Uygulamayı Docker ile tek komutla ayağa kaldırabilmek
-* Loglama ile davranışların izlenebilmesi
-* UI testleri ile doğrulama yapılabilmesi
+The system retrieves movie data from TMDB (The Movie Database), manages user authentication, collects interaction signals (favorites, ratings, trailer views), and generates recommendations using an embedding-based approach.
 
-## Başarı Kriterleri
+### Key Features
 
-* Sistem çalışır durumda: `/` ana sayfa, `/search`, `/detail/<id>` düzgün açılmalı
-* Kayıt/giriş akışı çalışmalı
-* `/api/personalized` endpoint’i kullanıcı sinyali varsa öneri döndürmeli
-* Loglar istekleri ve kritik olayları kaydetmeli
-* UI testleri “passed” olmalı
+* Movie search & listing
+* Movie detail page
+* Add to favorites
+* Rating (like/dislike)
+* Trailer viewing event tracking
+* **Personalized recommendations (embedding-based)**
+* Dockerized setup
+* Logging & UI testing
 
 ---
 
-# 4) Kapsam ve Varsayımlar
+# 2) Problem Statement & Motivation
 
-## Kapsam İçinde
+With the increasing amount of content available today, users struggle to choose what to watch.
 
-* Web tabanlı arayüz (Flask template + JS)
-* PostgreSQL veritabanı
-* TMDB API üzerinden film verisi
-* Embedding tabanlı öneri ve aday havuzu
-* Cache (in-memory + tasarımsal Redis)
-* Loglama (request ve auth/api olayları)
-* Selenium ile temel UI testleri
+This project addresses:
+
+* **Discovery problem:** Difficulty finding relevant movies
+* **Lack of personalization:** Same content shown to all users
+* **Underutilized user signals:** Interactions like favorites and ratings are not leveraged
+
+**Motivation:** Even small user interactions (favorites, ratings, trailer views) can significantly improve recommendation quality.
 
 ---
 
-# 5) Kullanılan Teknolojiler
+# 3) Goals & Success Criteria
+
+## Goals
+
+* Enable users to search and view movie details
+* Store user interactions (favorites, ratings, trailer views)
+* Generate personalized recommendations
+* Run the system with a single Docker command
+* Track behavior via logging
+* Validate functionality with UI tests
+
+## Success Criteria
+
+* Core pages (`/`, `/search`, `/detail/<id>`) work correctly
+* Authentication flow works (register/login)
+* `/api/personalized` returns recommendations when data exists
+* Logs capture requests and key events
+* UI tests pass successfully
+
+---
+
+# 4) Scope & Assumptions
+
+## Included
+
+* Web UI (Flask templates + JS)
+* PostgreSQL database
+* TMDB API integration
+* Embedding-based recommendation system
+* Cache (in-memory + Redis-ready design)
+* Logging system
+* Selenium-based UI testing
+
+---
+
+# 5) Technologies Used
 
 ## Backend
 
-* **Python 3.11+**
-* **Flask** (web framework)
-* **Gunicorn** (prod-ready WSGI server)
-* **psycopg / PostgreSQL** (veritabanı)
-* **requests** (TMDB API çağrıları)
+* Python 3.11+
+* Flask
+* Gunicorn (production-ready WSGI server)
+* PostgreSQL (psycopg)
+* requests (for TMDB API)
 
-## Öneri Sistemi
+## Recommendation System
 
-* **sentence-transformers / transformers** (embedding üretimi için)
-* **NumPy** (vektör benzerliği ve matris işlemleri)
+* sentence-transformers / transformers
+* NumPy
 
 ## Frontend
 
-* **Jinja2 template**
-* **Vanilla JavaScript**
-* **TailwindCSS (CDN)**
+* Jinja2 templates
+* Vanilla JavaScript
+* TailwindCSS (CDN)
 
 ## DevOps
 
-* **Docker / Docker Compose**
-* (Opsiyonel) **Redis** servisi (cache için tasarımsal altyapı)
+* Docker / Docker Compose
+* Redis (optional, for caching)
 
-## Test
+## Testing
 
-* **pytest**
-* **selenium**
-* **webdriver-manager** (ChromeDriver yönetimi)
-
----
-
-# 6) Genel Mimari
-
-Proje, modüler bir monolith olarak tasarlanmıştır:
-
-* `app/__init__.py` → Flask uygulaması oluşturma, blueprint kayıtları, loglama kurulumu
-* `app/blueprints/` → Sayfalar, auth ve API endpoint’leri
-* `app/services/` → TMDB erişimi, öneri sistemi, embedding işlemleri, yardımcı fonksiyonlar
-* `app/db.py` → DB bağlantı ve init işlemleri
-* `docker-compose.yml` → web + db (+ opsiyonel redis)
-* `wsgi.py` → gunicorn giriş noktası
-
-Mimari akış (yüksek seviye):
-
-1. Kullanıcı arayüzden istek yapar
-2. Flask blueprint route karşılar
-3. Servis katmanı (services) TMDB/DB/embedding işlemlerini yapar
-4. Sonuç template veya JSON (API) olarak döndürülür
-5. Loglama katmanı request ve olayları kaydeder
+* pytest
+* selenium
+* webdriver-manager
 
 ---
 
-# 7) Modüller ve Katmanlar
+# 6) Architecture Overview
 
-## 7.1 Blueprints
+The project is designed as a **modular monolith**:
 
-* **pages blueprint:** Ana sayfa, arama sayfası, detay sayfası, favoriler, listeleme gibi UI sayfaları
-* **auth blueprint:** Register / Login / Logout
-* **api blueprint:** `/api/*` uçları (featured, discover, personalized vb.)
+* `app/__init__.py` → App initialization, blueprint registration, logging setup
+* `app/blueprints/` → UI pages, authentication, API endpoints
+* `app/services/` → TMDB, recommendation engine, embeddings, utilities
+* `app/db.py` → Database connection & initialization
+* `docker-compose.yml` → Services (web + db + optional redis)
+* `wsgi.py` → Entry point for Gunicorn
 
-## 7.2 Services
+### High-Level Flow
 
-* `tmdb.py`: TMDB API çağrıları, tür listeleri, caching
-* `recommender.py`: aday havuzu, kullanıcı profili, skor hesaplama, öneri üretimi
-* `embeddings.py`: film embedding’lerini üretme/ensure etme
-* `events.py`: olay loglama (watch_trailer, login_success vb.)
-* `auth.py`: login_required ve kullanıcı yardımcıları
-* `utils.py`: zaman, hash, yardımcı fonksiyonlar
-
----
-
-# 8) Veritabanı Tasarımı (Özet)
-
-Proje, kullanıcı etkileşimlerini saklayarak öneri üretir. Öne çıkan tablolar:
-
-* `users`: kullanıcı bilgileri
-* `favorites`: kullanıcı favorileri
-* `ratings`: kullanıcı puan/geri bildirimleri
-* `trailer_events`: fragman izleme olayları
-* `candidate_movies`: öneri için aday havuzu (film meta)
-* `user_profiles`: kullanıcı embedding profili
-* `user_recommendations`: üretilen önerilerin cache’lenmiş hali
-
-Bu tasarım, öneri sistemi için gerekli sinyalleri kalıcı hale getirir ve tekrar hesaplama maliyetini düşürür.
+1. User sends a request from UI
+2. Flask route handles it
+3. Service layer processes logic (TMDB / DB / embeddings)
+4. Response returned as HTML or JSON
+5. Logs are recorded
 
 ---
 
-# 9) REST API Tasarımı ve Nerede Kullanıldı?
+# 7) Modules & Layers
 
-projede **REST API** kullanıldı. “Frontend sayfalar” dışında, arayüzün dinamik kısımlarında JSON dönen API endpoint’leri kullanılır.
+## Blueprints
 
-Örnek endpointler:
+* **pages** → UI pages (home, search, detail, favorites)
+* **auth** → register / login / logout
+* **api** → `/api/*` endpoints
 
-* `GET /api/featured`
-  Ana sayfadaki “öne çıkanlar / popülerler” gibi film listelerini JSON döndürür.
+## Services
 
-* `GET /api/discover`
-  Filtreli keşif (genre/year/sort) için JSON döndürür.
-
-* `GET /api/search_suggest`
-  Canlı arama önerileri (autocomplete) için JSON döndürür.
-
-* `POST /api/trailer_event`
-  Kullanıcı fragman izleyince olayı DB’ye kaydeder.
-
-* `GET /api/personalized`
-  Kullanıcı profili varsa kişiselleştirilmiş öneri listesini döndürür.
-
-Bu endpointler arayüz tarafında JS ile çağrılarak sayfa yenilemeden içerik günceller.
+* `tmdb.py` → TMDB API integration & caching
+* `recommender.py` → candidate pool, scoring, recommendation generation
+* `embeddings.py` → embedding generation
+* `events.py` → user event logging
+* `auth.py` → authentication utilities
+* `utils.py` → helper functions
 
 ---
 
-# 10) Öneri Sistemi Nasıl Çalışır?
+# 8) Database Design (Summary)
 
-Öneri sistemi “sinyal toplama → kullanıcı profili → aday film havuzu → benzerlik skoru” adımlarını izler.
+The system stores user interactions to generate recommendations.
 
-## 10.1 Kullanıcı Sinyalleri
+Key tables:
 
-Sistem aşağıdaki etkileşimleri “kullanıcı tercihi” olarak yorumlar:
+* `users`
+* `favorites`
+* `ratings`
+* `trailer_events`
+* `candidate_movies`
+* `user_profiles`
+* `user_recommendations`
 
-* Favoriye ekleme (pozitif sinyal, yüksek ağırlık)
-* Puanlama (beğeni/eleştiri gibi pozitif/negatif sinyal)
-* Fragman izleme (ilgi göstergesi, orta ağırlık)
-
-## 10.2 Kullanıcı Profili (Embedding)
-
-* Kullanıcının etkileşimde bulunduğu filmlerin embedding’leri alınır.
-* Bu embedding’ler ağırlıklı ortalama ile birleştirilir.
-* Sonuç normalize edilerek **kullanıcı vektörü** oluşturulur.
-* Bu vektör `user_profiles` tablosunda saklanır.
-
-## 10.3 Aday Havuzu (Candidate Pool)
-
-* TMDB üzerinden popüler/top-rated/trending/now-playing listelerinden aday filmler çekilir.
-* Aday film listesi DB’de `candidate_movies` tablosuna yazılır.
-* Bu adayların embedding matrisi hazırlanır.
-
-## 10.4 Skorlama
-
-* Her aday film için skor: **cosine benzerlik mantığında dot product**
-  `score = candidate_matrix @ user_vector`
-* Kullanıcının zaten gördüğü/etkileşim yaptığı filmler filtrelenir.
-* En yüksek skorlu N film öneri olarak döndürülür.
-* Sonuçlar `user_recommendations` tablosuna kaydedilerek tekrar hesaplama azaltılır.
+This design reduces recomputation cost and enables efficient recommendation generation.
 
 ---
 
-# 11) Cache ve Performans Yaklaşımı
+# 9) REST API Design & Usage
 
-Projede hem **in-memory cache** hem de (tasarımsal olarak) **Redis cache katmanı** düşünülmüştür:
+The project uses **REST APIs** to dynamically update UI components.
 
-**@lru_cache:**
-Tür listeleri gibi küçük ve sık kullanılan statik veriler için.
+### Example Endpoints
 
-**Bellek içi aday havuzu (_mem_cand):**
-`get_candidate_cache()` ile `candidate_movies` tablosundan çekilen embedding matrisi RAM’de tutulur.
-Böylece her istekte veritabanından komple set çekilmez.
+* `GET /api/featured` → returns popular/featured movies
+* `GET /api/discover` → filtered movie discovery
+* `GET /api/search_suggest` → autocomplete suggestions
+* `POST /api/trailer_event` → logs trailer view
+* `GET /api/personalized` → personalized recommendations
 
-**Redis (tasarım):**
-TMDB sonuçlarının ve embeddinglerin kısa süreli cache’i için kullanılmak üzere `docker-compose.yml` içinde `redis` servisi tanımlanmıştır.
-İleride yüksek trafik altında network tabanlı merkezi cache olarak kullanılabilir.
-
+These endpoints are consumed via JavaScript without page reload.
 
 ---
 
-# 12) Loglama ve İzlenebilirlik (Projeye Eklenen Kısım)
+# 10) How the Recommendation System Works
 
-Bu projede uygulama davranışını izlemek için **merkezi loglama** eklenmiştir. Loglar, hem hata ayıklamayı kolaylaştırır hem de kullanıcı davranış analizi sağlar.
+The pipeline:
 
-## 12.1 Loglama Mimarisinin Amacı
+### 1. User Signals
 
-* API çağrıları başarılı mı? Kaç sonuç dönüyor?
-* Login/Register gibi kritik adımlar ne sıklıkla başarısız oluyor?
-* Öneri endpoint’i cache’ten mi geliyor yoksa yeni mi üretiliyor?
-* Sistem canlıda sorun çıkarırsa “nerede koptuğu” hızlı bulunur.
+* Favorites (strong positive signal)
+* Ratings (positive/negative signal)
+* Trailer views (medium signal)
 
-## 12.2 Loglanan Örnek Olaylar
+### 2. User Profile (Embedding)
 
-* `/api/featured called` ve `success returned=20`
-* `Login FAILED` / `Login SUCCESS`
+* Combine embeddings of interacted movies
+* Weighted average → normalized vector
+* Stored in `user_profiles`
+
+### 3. Candidate Pool
+
+* Movies fetched from TMDB (popular, trending, etc.)
+* Stored in `candidate_movies`
+* Embedding matrix prepared
+
+### 4. Scoring
+
+* Score = cosine similarity (dot product)
+* Already seen movies are filtered out
+* Top-N results returned
+* Cached in `user_recommendations`
+
+---
+
+# 11) Caching & Performance Strategy
+
+* **@lru_cache** → for static data (genres, etc.)
+* **In-memory cache** → candidate embeddings stored in RAM
+* **Redis (design-ready)** → for scalable caching in production
+
+---
+
+# 12) Logging & Observability
+
+Centralized logging is implemented.
+
+### Example Logs
+
+* `/api/featured called`
+* `Login SUCCESS / FAILED`
 * `Register FAILED (duplicate)`
-* `/api/personalized` için `from_cache` veya `fresh` bilgisi
+* `/api/personalized → from_cache / fresh`
 
-Bu loglar `docker compose logs -f web` komutuyla canlı izlenebilir.
+### Benefits
 
-## 12.3 Logların Sunum Değeri
+* Easier debugging
+* Monitoring system behavior
+* Demonstrates production-readiness
 
-Rapor/sunumda log çıktısı göstermek:
+Logs can be viewed via:
 
-* Projenin “gerçek dünyaya daha yakın” olduğunu,
-* İzleme/analiz altyapısı bulunduğunu,
-* Debug kolaylığını
-  kanıtlar.
-
----
-
-# 13) Güvenlik ve Kimlik Doğrulama
-
-* Kullanıcı şifreleri **hash**’lenerek saklanır.
-* Oturum yönetimi `session` üzerinden yapılır.
-* `login_required` ile korunan endpoint’lere girişsiz erişim engellenir.
-* Hassas loglarda e-posta gibi bilgiler direkt değil, gerekirse **hash** ile kaydedilebilir.
+```bash
+docker compose logs -f web
+```
 
 ---
 
-# 14) Test Süreci (Selenium + Pytest)
+# 13) Security & Authentication
 
-Projede UI doğrulaması için **Selenium tabanlı uçtan uca testler** eklenmiştir.
+* Passwords are **hashed**
+* Session-based authentication
+* Protected endpoints via `login_required`
+* Sensitive data can be masked or hashed in logs
 
-Testlerin amacı:
+---
 
-* Ana sayfa açılıyor mu?
-* Arama formu yönlendirme yapıyor mu?
+# 14) Testing (Selenium + Pytest)
 
-## Test Çalıştırma Mantığı
+End-to-end UI tests are implemented.
 
-* Uygulama Docker’da çalışır: `http://localhost:5002`
-* Testler local `.venv` ortamında çalıştırılır.
-* `APP_BASE_URL` ile testlerin hangi adrese gideceği ayarlanır.
+### What is tested?
 
-Örnek:
+* Homepage loading
+* Search functionality
+
+### Run tests:
 
 ```bash
 export APP_BASE_URL=http://localhost:5002
 pytest -q
 ```
 
-Başarılı koşum çıktısı:
+Expected result:
 
-* `2 passed`
+```
+2 passed
+```
 
 ---
 
-# 15) Kurulum ve Çalıştırma
+# 15) Setup & Run
 
-## 15.1 Docker ile Çalıştırma
+## Run with Docker
 
 ```bash
 docker compose up --build
 ```
 
-Portlar (örnek):
+### Ports
 
-* Web: `http://localhost:5002`
-* DB: `localhost:5433`
+* Web: [http://localhost:5002](http://localhost:5002)
+* DB: localhost:5433
 
-## 15.2 Logları İzleme
+## View Logs
 
 ```bash
 docker compose logs -f web
 ```
 
-## 15.3 Testleri Çalıştırma (Local)
+## Run Tests (Local)
 
 ```bash
 python3 -m venv .venv
@@ -360,11 +333,10 @@ pytest -q
 
 ---
 
-# 16) Sonuç
+# 16) Conclusion
 
-Bu projede, film keşfi ve kişiselleştirme problemine yönelik çalışan bir web uygulaması geliştirilmiştir. Uygulama, kullanıcı davranışlarını kaydedip embedding tabanlı öneri üretebilen bir altyapıya sahiptir. Docker ile kolay çalıştırılabilmesi, loglama ve test eklenmesi projenin “bitirme projesi” seviyesinin üzerine çıkmasını sağlamıştır.
+This project demonstrates a full-stack web application that solves the movie discovery problem using an embedding-based recommendation system.
+
+With Dockerized deployment, logging, and testing, the project goes beyond a typical graduation project and approaches real-world production standards.
 
 ---
-
-
-
