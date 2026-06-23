@@ -39,7 +39,7 @@ def invalidate_user_cache(uid: int):
 
 def refresh_candidate_pool(force: bool = False):
     with db() as con, con.cursor() as cur:
-        cur.execute("SELECT MAX(updated_at) AS m, BOOL_AND(data ? 'overview') AS enriched FROM candidate_movies")
+        cur.execute("SELECT MAX(updated_at) AS m, BOOL_AND(data ? 'overview' AND data ? 'popularity') AS enriched FROM candidate_movies")
         row = cur.fetchone()
         last = row["m"]
         enriched = bool(row["enriched"])
@@ -77,6 +77,7 @@ def refresh_candidate_pool(force: bool = False):
             "title": m.get("title"),
             "overview": m.get("overview"),
             "genre_ids": m.get("genre_ids") or [],
+            "popularity": m.get("popularity") or 0.0,
             "poster_path": m.get("poster_path"),
             "vote_average": m.get("vote_average"),
             "release_date": m.get("release_date"),
@@ -289,8 +290,87 @@ def get_cached_recommendations(uid: int, sig: str, top_n: int = 12):
     return results
 
 
+def _min_max(values):
+    values = np.asarray(values, dtype=np.float32)
+    if not len(values):
+        return values
+    low, high = float(values.min()), float(values.max())
+    if high - low < 1e-8:
+        return np.zeros_like(values)
+    return (values - low) / (high - low)
+
+
+def _engagement_scores(cur, candidate_ids):
+    """Global positive engagement is a lightweight behavioural ranking signal."""
+    cur.execute(
+        """
+        SELECT movie_id, SUM(weight) AS score
+        FROM (
+            SELECT movie_id, 2.0::float AS weight FROM favorites
+            UNION ALL
+            SELECT movie_id, CASE WHEN value=1 THEN 1.5 ELSE -1.0 END::float FROM ratings
+            UNION ALL
+            SELECT movie_id, 0.4::float AS weight FROM trailer_events
+        ) interactions
+        WHERE movie_id = ANY(%s)
+        GROUP BY movie_id
+        """,
+        (candidate_ids,),
+    )
+    return {row["movie_id"]: max(float(row["score"]), 0.0) for row in cur.fetchall()}
+
+
+def _collaborative_scores(cur, uid: int, candidate_ids):
+    """Find candidate films liked by users who overlap with this user's likes."""
+    cur.execute(
+        """
+        WITH own_positive AS (
+            SELECT movie_id FROM favorites WHERE user_id=%s
+            UNION
+            SELECT movie_id FROM ratings WHERE user_id=%s AND value=1
+        ), positive_interactions AS (
+            SELECT user_id, movie_id FROM favorites
+            UNION
+            SELECT user_id, movie_id FROM ratings WHERE value=1
+        )
+        SELECT peer.movie_id, COUNT(DISTINCT peer.user_id)::float AS score
+        FROM positive_interactions seed
+        JOIN own_positive own ON own.movie_id=seed.movie_id
+        JOIN positive_interactions peer ON peer.user_id=seed.user_id
+        WHERE seed.user_id<>%s AND peer.movie_id<>ALL(%s)
+          AND peer.movie_id=ANY(%s)
+        GROUP BY peer.movie_id
+        """,
+        (uid, uid, uid, candidate_ids, candidate_ids),
+    )
+    return {row["movie_id"]: float(row["score"]) for row in cur.fetchall()}
+
+
+def mmr_rerank(candidate_indices, base_scores, embedding_matrix, metadata, top_n: int,
+               diversity_lambda: float = 0.78):
+    """Maximal Marginal Relevance prevents near-duplicate recommendation rows."""
+    remaining = sorted(candidate_indices, key=lambda idx: float(base_scores[idx]), reverse=True)[:40]
+    selected, selected_genres = [], set()
+    while remaining and len(selected) < top_n:
+        best_idx, best_value = None, -float("inf")
+        for idx in remaining:
+            duplicate_similarity = max(
+                (float(embedding_matrix[idx] @ embedding_matrix[other]) for other in selected),
+                default=0.0,
+            )
+            genres = set((metadata.get(idx) or {}).get("genre_ids") or [])
+            genre_bonus = 0.025 if genres and not genres.issubset(selected_genres) else 0.0
+            value = diversity_lambda * float(base_scores[idx]) - (1 - diversity_lambda) * duplicate_similarity + genre_bonus
+            if value > best_value:
+                best_idx, best_value = idx, value
+        selected.append(best_idx)
+        selected_genres.update((metadata.get(best_idx) or {}).get("genre_ids") or [])
+        remaining.remove(best_idx)
+    return selected
+
+
 def build_user_recommendations(uid: int, sig: str, user_vec, candidate_cache, top_n: int = 12):
-    """Score prepared candidates and persist the resulting recommendation cache."""
+    """Hybrid-score prepared candidates, diversify them, then persist the cache."""
     mat, ids, meta = candidate_cache["mat"], candidate_cache["ids"], candidate_cache["meta"]
     if mat is None or not ids or user_vec is None:
         return []
@@ -301,14 +381,33 @@ def build_user_recommendations(uid: int, sig: str, user_vec, candidate_cache, to
             cur.execute(f"SELECT movie_id FROM {table} WHERE user_id=%s", (uid,))
             seen.update(row["movie_id"] for row in cur.fetchall())
 
-        scores = mat @ user_vec
-        pairs = sorted(
-            ((float(scores[i]), mid) for i, mid in enumerate(ids) if mid not in seen),
-            reverse=True, key=lambda pair: pair[0],
-        )[:top_n]
+        content_scores = _min_max(mat @ user_vec)
+        engagement_map = _engagement_scores(cur, ids)
+        collaborative_map = _collaborative_scores(cur, uid, ids)
+        engagement_scores = _min_max([engagement_map.get(mid, 0.0) for mid in ids])
+        collaborative_scores = _min_max([collaborative_map.get(mid, 0.0) for mid in ids])
+        vote_scores = np.asarray([
+            min(max(float((meta.get(mid) or {}).get("vote_average") or 0.0) / 10.0, 0.0), 1.0)
+            for mid in ids
+        ], dtype=np.float32)
+        popularity_scores = _min_max([
+            float((meta.get(mid) or {}).get("popularity") or 0.0) for mid in ids
+        ])
+        quality_scores = 0.70 * vote_scores + 0.30 * popularity_scores
+
+        if any(collaborative_map.values()):
+            hybrid_scores = (0.62 * content_scores + 0.20 * collaborative_scores +
+                             0.10 * engagement_scores + 0.08 * quality_scores)
+        else:
+            hybrid_scores = 0.78 * content_scores + 0.14 * engagement_scores + 0.08 * quality_scores
+
+        available = [index for index, movie_id in enumerate(ids) if movie_id not in seen]
+        index_metadata = {index: meta.get(movie_id) or {} for index, movie_id in enumerate(ids)}
+        selected_indices = mmr_rerank(available, hybrid_scores, mat, index_metadata, top_n)
         results = []
         now = now_utc()
-        for score, mid in pairs:
+        for index in selected_indices:
+            mid, score = ids[index], float(hybrid_scores[index])
             data = meta.get(mid) or {"id": mid}
             item = {
                 "id": data.get("id", mid), "title": data.get("title"),
