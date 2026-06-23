@@ -34,10 +34,12 @@ def embed_texts(texts):
     vecs = sbert().encode(texts, convert_to_numpy=True, normalize_embeddings=True)
     return np.asarray(vecs, dtype=np.float32)
 
-def ensure_embeddings(movie_ids):
+def ensure_embeddings(movie_ids, text_overrides=None):
+    """Load or create embeddings, optionally using already-fetched movie metadata."""
     movie_ids = [int(x) for x in set(movie_ids or []) if x]
     if not movie_ids:
         return {}
+    text_overrides = {int(mid): text for mid, text in (text_overrides or {}).items()}
 
     with db() as con:
         existing = {}
@@ -51,7 +53,9 @@ def ensure_embeddings(movie_ids):
 
         need, texts = [], []
         for mid in movie_ids:
-            text = movie_text_en(mid)
+            # Candidate-pool list responses already contain title and overview.
+            # Reusing them avoids one serial TMDB detail request per candidate.
+            text = text_overrides[mid] if mid in text_overrides else movie_text_en(mid)
             h = _hash_text(text)
             row = existing.get(mid)
             if (row is None) or (row.get("text_hash") != h) or (row.get("embedding") is None):

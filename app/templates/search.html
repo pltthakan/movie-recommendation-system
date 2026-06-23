@@ -3,7 +3,7 @@
 <h2 class="text-2xl font-bold mb-3">Arama: “{{ q }}”</h2>
 <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-5">
   {% for m in results.results %}
-  <a href="/movie/{{ m.id }}" class="group">
+  <a href="/movie/{{ m.id }}" data-movie-id="{{ m.id }}" data-track-source="search_results" class="group">
     <img class="poster w-full aspect-[2/3] object-cover"
          src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}">
     <div class="mt-2">

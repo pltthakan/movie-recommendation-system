@@ -24,17 +24,53 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/film_app
+      REDIS_URL: redis://redis:6379/0
       AUTO_WARMUP: "0"
       TZ: Europe/Istanbul
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - models:/models
     restart: unless-stopped
+
+  event-worker:
+    build: .
+    command: python -m app.workers.event_worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/film_app
+      REDIS_URL: redis://redis:6379/0
+      AUTO_WARMUP: "0"
+      TZ: Europe/Istanbul
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - models:/models
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 
 
 volumes:
   pgdata:
   models:
+  redisdata:

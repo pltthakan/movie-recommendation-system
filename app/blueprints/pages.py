@@ -2,7 +2,7 @@
 import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 from ..services.tmdb import tmdb_get, get_genres
-from ..services.events import log_event
+from ..services.events import emit_behavior_event, log_event
 from ..services.auth import login_required, current_user
 from ..services.recommender import invalidate_user_cache
 from ..db import db
@@ -23,7 +23,8 @@ def home():
 
 @bp.get("/movie/<int:movie_id>")
 def movie_detail(movie_id):
-    log_event("view_movie", {"movie_id": movie_id})
+    # Detail views are server-side so the movie id cannot be spoofed by the UI.
+    emit_behavior_event("detail_view", movie_id=movie_id, source="movie_detail")
 
     detail = tmdb_get(
         f"/movie/{movie_id}",
@@ -179,10 +180,10 @@ def toggle_favorite(movie_id):
         con.commit()
 
     if removed:
-        log_event("favorite_remove", {"movie_id": movie_id})
+        emit_behavior_event("unfavorite", movie_id=movie_id, source="movie_detail")
         flash("Favorilerden kaldırıldı.", "ok")
     else:
-        log_event("favorite_add", {"movie_id": movie_id})
+        emit_behavior_event("favorite", movie_id=movie_id, source="movie_detail")
         flash("Favorilere eklendi.", "ok")
 
     invalidate_user_cache(session["user_id"])
@@ -215,7 +216,8 @@ def rate_movie(movie_id):
             action = "rate_like" if val == 1 else "rate_dislike"
         con.commit()
 
-    log_event(action, {"movie_id": movie_id, "value": val})
+    event_type = "unlike" if action == "rate_remove" else ("like" if val == 1 else "dislike")
+    emit_behavior_event(event_type, movie_id=movie_id, source="movie_detail")
     flash("Kaydedildi.", "ok")
     invalidate_user_cache(session["user_id"])
     return redirect(url_for("pages.movie_detail", movie_id=movie_id))

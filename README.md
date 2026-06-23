@@ -7,6 +7,25 @@
 
 ---
 
+## TMDB credentials
+
+The application supports either TMDB credential type. Put only one of these in
+your uncommitted `.env` file:
+
+```env
+# v3 API key
+TMDB_API_KEY=...
+
+# or v4 Read Access Token (JWT)
+TMDB_READ_ACCESS_TOKEN=...
+```
+
+Existing `.env` files that accidentally place a v4 JWT in `TMDB_API_KEY` are
+also recognized and sent as a Bearer token. Prefer the explicit
+`TMDB_READ_ACCESS_TOKEN` name for new setup.
+
+---
+
 ## Table of Contents
 
 1. Project Overview
@@ -232,6 +251,44 @@ The pipeline:
 * Already seen movies are filtered out
 * Top-N results returned
 * Cached in `user_recommendations`
+
+---
+
+## Event-Driven Behavior Pipeline
+
+User behavior is emitted with a versioned event contract and delivered through
+**Redis Streams**. The web application remains responsible for immediate state
+changes (favorites and ratings); the background `event-worker` stores raw
+events idempotently and rebuilds the affected user profile asynchronously.
+
+The worker also warms a 60-film candidate/embedding cache at startup and every
+hour. `/api/personalized` only reads the prepared cache; it never waits for
+TMDB calls or embedding generation.
+
+### Event envelope
+
+Every event contains `event_id`, `schema_version`, `occurred_at`, `user_id`,
+`session_id`, `event_type`, `source` and `context.movie_id`. User identity is
+read from the server-side session, not from browser payloads.
+
+### Behaviour events
+
+* Passive: `impression`, `click`, `detail_view`, `trailer_start`
+* Preference: `favorite`, `unfavorite`, `like`, `dislike`, `unlike`
+
+The UI records impressions through `IntersectionObserver` and clicks through a
+delegated event handler. `POST /api/events` accepts only passive browser
+events; preference events are produced by trusted server routes.
+
+### Run
+
+```bash
+docker compose up --build
+```
+
+This starts `web`, PostgreSQL, Redis and `event-worker`. Monitor the worker
+with `docker compose logs -f event-worker`. If Redis is temporarily unavailable,
+events are stored directly in PostgreSQL so user requests do not fail.
 
 ---
 

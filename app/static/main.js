@@ -5,12 +5,48 @@ async function fetchJson(url) {
   return await r.json();
 }
 
-function movieCard(m) {
+const passiveEventKeys = new Set();
+let movieImpressionObserver;
+
+function trackMovieEvent(eventType, movieId, source) {
+  if (!movieId) return;
+  const key = `${eventType}:${movieId}:${source}`;
+  if (eventType === "impression" && passiveEventKeys.has(key)) return;
+  if (eventType === "impression") passiveEventKeys.add(key);
+
+  const body = JSON.stringify({ event_type: eventType, movie_id: Number(movieId), source: source || "web" });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/events", new Blob([body], { type: "application/json" }));
+    return;
+  }
+  fetch("/api/events", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body, keepalive: true, credentials: "same-origin"
+  }).catch(() => {});
+}
+
+function observeMovieCards(root = document) {
+  const cards = root.querySelectorAll("a[data-movie-id]");
+  if (!("IntersectionObserver" in window)) return;
+  if (!movieImpressionObserver) {
+    movieImpressionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const card = entry.target;
+        trackMovieEvent("impression", card.dataset.movieId, card.dataset.trackSource);
+        movieImpressionObserver.unobserve(card);
+      });
+    }, { threshold: 0.5 });
+  }
+  cards.forEach((card) => movieImpressionObserver.observe(card));
+}
+
+function movieCard(m, source = "unknown") {
   const img = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : "";
   const year = (m.release_date || "").slice(0, 4);
   const score = (m.vote_average != null) ? `<span class="chip">${m.vote_average.toFixed(1)}</span>` : "";
   return `
-    <a href="/movie/${m.id}" class="group card-3d">
+    <a href="/movie/${m.id}" data-movie-id="${m.id}" data-track-source="${source}" class="group card-3d">
       <img class="poster w-full aspect-[2/3] object-cover" src="${img}">
       <div class="mt-2 flex items-center justify-between">
         <div class="font-semibold group-hover:text-sky-400 truncate">${m.title}</div>
@@ -34,7 +70,7 @@ function featCard(m) {
   const year = (m.release_date || "").slice(0,4);
   const score = (m.vote_average != null) ? m.vote_average.toFixed(1) : "";
   return `
-    <a href="/movie/${m.id}" class="group snap-start rounded-2xl overflow-hidden bg-slate-800/50 border border-slate-700/40 card-3d">
+    <a href="/movie/${m.id}" data-movie-id="${m.id}" data-track-source="featured" class="group snap-start rounded-2xl overflow-hidden bg-slate-800/50 border border-slate-700/40 card-3d">
       <div class="relative">
         <img src="${img}" class="w-full aspect-[16/9] object-cover" loading="lazy">
         ${score ? `<div class="absolute top-2 right-2 chip bg-slate-900/60">⭐ ${score}</div>` : ""}
@@ -54,6 +90,7 @@ async function loadFeatured() {
     const data = await fetchJson("/api/featured");
     const items = (data.results || []).slice(0, 12);
     row.innerHTML = items.map(featCard).join("");
+    observeMovieCards(row);
   } catch (e) {
     // sessiz geç
   }
@@ -79,7 +116,7 @@ function bindFeaturedArrows() {
 }
 
 // ----------------- Size Özel Öneriler -----------------
-async function loadPersonalized() {
+async function loadPersonalized(attempt = 0) {
   const grid = document.getElementById("personalizedGrid");
   const info = document.getElementById("personalizedInfo");
   if (!grid) return;
@@ -89,11 +126,17 @@ async function loadPersonalized() {
     const items = (data.results || []).slice(0, 9);
 
     if (!items.length) {
+      if (["profile_pending", "recommendations_pending"].includes(data.note)) {
+        grid.innerHTML = `<div class="text-slate-400">Önerileriniz arka planda hazırlanıyor. Birkaç saniye içinde yenilenecek.</div>`;
+        if (attempt < 5) setTimeout(() => loadPersonalized(attempt + 1), 3000);
+        return;
+      }
       grid.innerHTML = `<div class="text-slate-400">Henüz yeterli sinyal yok. Birkaç film beğen / favorile / fragman izle 😊</div>`;
       return;
     }
 
-    grid.innerHTML = items.map(movieCard).join("");
+    grid.innerHTML = items.map((m) => movieCard(m, "personalized")).join("");
+    observeMovieCards(grid);
     if (info) info.textContent = "Beğenilerinize göre";
   } catch (e) {
     // giriş yoksa veya model yoksa sessiz geç
@@ -102,6 +145,11 @@ async function loadPersonalized() {
 
 // ----------------- Sayfa hazır -----------------
 document.addEventListener("DOMContentLoaded", () => {
+  observeMovieCards(document);
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest("a[data-movie-id]");
+    if (card) trackMovieEvent("click", card.dataset.movieId, card.dataset.trackSource);
+  }, true);
   // Öne çıkanlar
   loadFeatured();
   bindFeaturedArrows();
@@ -144,7 +192,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (full && gridFull) {
       full.classList.remove("hidden");
-      gridFull.innerHTML = (data.results || []).map(movieCard).join("");
+      gridFull.innerHTML = (data.results || []).map((m) => movieCard(m, "discover")).join("");
+      observeMovieCards(gridFull);
 
       if (infoFull)  infoFull.textContent = `Sayfa ${page} / ${Math.max(1, totalPages)}`;
       if (pagerFull) pagerFull.hidden = totalPages <= 1;
@@ -193,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const year = (m.release_date || "").slice(0,4);
       const score = (m.vote_average != null) ? m.vote_average.toFixed(1) : "";
       return `
-        <a href="/movie/${m.id}" class="suggest-item ${idx===active?'active':''}" data-idx="${idx}">
+        <a href="/movie/${m.id}" class="suggest-item ${idx===active?'active':''}" data-idx="${idx}" data-movie-id="${m.id}" data-track-source="search_suggest">
           <img src="${img}" class="w-12 h-16 object-cover rounded-md" onerror="this.style.display='none'">
           <div class="min-w-0">
             <div class="text-slate-100 font-medium truncate">${m.title || ""}</div>
@@ -205,6 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </a>`;
     }).join("");
     box.classList.remove("hidden");
+    observeMovieCards(box);
     box.querySelectorAll("a.suggest-item").forEach(a => {
       a.addEventListener("mousemove", () => {
         active = parseInt(a.dataset.idx, 10);
