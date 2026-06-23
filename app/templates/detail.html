@@ -95,7 +95,7 @@
       <h3 class="text-xl font-bold mb-2">Benzer Filmler</h3>
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {% for r in recs.results[:8] %}
-        <a href="/movie/{{ r.id }}" class="group card-3d">
+        <a href="/movie/{{ r.id }}" data-movie-id="{{ r.id }}" data-track-source="similar_movies" class="group card-3d">
           <img class="poster w-full aspect-[2/3] object-cover"
                src="https://image.tmdb.org/t/p/w500{{ r.poster_path }}">
           <div class="mt-1 text-sm group-hover:text-sky-400">{{ r.title }}</div>

@@ -9,7 +9,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SENTENCE_TRANSFORMERS_HOME=/models
 
 WORKDIR /app
-Ş
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential gcc \
       curl \
@@ -32,4 +31,3 @@ EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gunicorn", "-b", "0.0.0.0:5000", "wsgi:app", "--workers", "1", "--threads", "4", "--timeout", "120"]
-

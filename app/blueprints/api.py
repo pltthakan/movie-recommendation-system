@@ -1,16 +1,14 @@
 # app/blueprints/api.py
-import json
 import logging
 from flask import Blueprint, request, jsonify, session
 
 from ..services.tmdb import tmdb_get
 from ..services.auth import login_required
-from ..services.events import log_event
+from ..services.events import emit_behavior_event, log_event
 from ..services.recommender import (
     invalidate_user_cache,
-    get_or_build_user_profile,
-    get_candidate_cache,
-    user_signals_hash
+    get_cached_user_profile,
+    get_cached_recommendations,
 )
 from ..services.embeddings import SentenceTransformer
 from ..db import db
@@ -105,8 +103,25 @@ def api_featured():
 
 
 # ----------------------------------------------------------
-#  /api/trailer_event
+#  /api/events and /api/trailer_event
 # ----------------------------------------------------------
+@bp.post("/api/events")
+def api_events():
+    """Receive passive browser events. Identity is always taken from the session."""
+    data = request.get_json(silent=True) or {}
+    event_type = data.get("event_type")
+    if event_type not in {"impression", "click"}:
+        return jsonify({"ok": False, "error": "unsupported_event_type"}), 400
+    try:
+        movie_id = int(data.get("movie_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_movie_id"}), 400
+
+    source = str(data.get("source") or "web")[:80]
+    emit_behavior_event(event_type, movie_id=movie_id, source=source)
+    return jsonify({"ok": True}), 202
+
+
 @bp.post("/api/trailer_event")
 @login_required
 def api_trailer_event():
@@ -131,7 +146,7 @@ def api_trailer_event():
         """, (session["user_id"], mid, now_utc()))
         con.commit()
 
-    log_event("watch_trailer", {"movie_id": mid})
+    emit_behavior_event("trailer_start", movie_id=mid, source="movie_detail")
     invalidate_user_cache(session["user_id"])
 
     logger.info("API trailer_event SUCCESS user_id=%s movie_id=%s", session["user_id"], mid)
@@ -152,93 +167,24 @@ def api_personalized():
         log_event("personalized", {"note": "sentence_transformers_missing"})
         return jsonify({"results": [], "note": "sentence_transformers_missing"}), 503
 
-    sig, user_vec = get_or_build_user_profile(uid)
+    # This endpoint intentionally performs no TMDB calls or embedding work.
+    # The event worker prepares both the profile and recommendation cache.
+    sig, user_vec = get_cached_user_profile(uid)
 
     if user_vec is None:
-        logger.warning("Personalized FAILED: no user profile user_id=%s", uid)
-        log_event("personalized", {"note": "no_signals"})
-        return jsonify({"results": [], "note": "no_signals"})
+        logger.info("Personalized profile pending user_id=%s", uid)
+        log_event("personalized", {"note": "profile_pending"})
+        return jsonify({"results": [], "note": "profile_pending"}), 202
 
     # ------------------------------------------------------
     # Cache kontrollü öneri alma
     # ------------------------------------------------------
-    with db() as con, con.cursor() as cur:
-        cur.execute("""
-            SELECT data, score
-            FROM user_recommendations
-            WHERE user_id=%s AND signals_hash=%s
-            ORDER BY score DESC
-            LIMIT 12
-        """, (uid, sig))
-        rows = cur.fetchall()
-
-    if rows:
-        results = []
-        for r in rows:
-            d = r["data"]
-            d["sim"] = round(float(r["score"]), 4)
-            results.append(d)
-
+    results = get_cached_recommendations(uid, sig)
+    if results:
         logger.info("API personalized from_cache user_id=%s count=%s", uid, len(results))
         log_event("personalized", {"note": "from_cache", "top_n": len(results)})
         return jsonify({"results": results, "note": "from_cache"})
 
-    # ------------------------------------------------------
-    # Fresh computation
-    # ------------------------------------------------------
-    cand = get_candidate_cache(force=False, limit=240)
-    mat, ids, meta = cand["mat"], cand["ids"], cand["meta"]
-
-    if mat is None or not ids:
-        logger.error("Personalized FAILED: no candidates")
-        log_event("personalized", {"note": "no_candidates"})
-        return jsonify({"results": [], "note": "no_candidates"})
-
-    # Kullanıcının daha önce gördüğü filmleri elimine et
-    seen = set()
-    with db() as con, con.cursor() as cur:
-        cur.execute("SELECT movie_id FROM favorites WHERE user_id=%s", (uid,))
-        seen.update([r["movie_id"] for r in cur.fetchall()])
-        cur.execute("SELECT movie_id FROM ratings WHERE user_id=%s", (uid,))
-        seen.update([r["movie_id"] for r in cur.fetchall()])
-        cur.execute("SELECT movie_id FROM trailer_events WHERE user_id=%s", (uid,))
-        seen.update([r["movie_id"] for r in cur.fetchall()])
-
-    scores = mat @ user_vec
-    pairs = [(float(scores[i]), mid) for i, mid in enumerate(ids) if mid not in seen]
-    pairs.sort(reverse=True, key=lambda x: x[0])
-    top = pairs[:12]
-
-    results = []
-    now = now_utc()
-
-    with db() as con, con.cursor() as cur:
-        for score, mid in top:
-            d = meta.get(mid) or {"id": mid}
-            item = {
-                "id": d.get("id", mid),
-                "title": d.get("title"),
-                "poster_path": d.get("poster_path"),
-                "vote_average": d.get("vote_average"),
-                "release_date": d.get("release_date"),
-            }
-            results.append({**item, "sim": round(score, 4)})
-
-            cur.execute("""
-                INSERT INTO user_recommendations(user_id, movie_id, score, data, signals_hash, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (user_id, movie_id)
-                DO UPDATE SET score=EXCLUDED.score,
-                              data=EXCLUDED.data,
-                              signals_hash=EXCLUDED.signals_hash,
-                              updated_at=EXCLUDED.updated_at
-            """, (uid, mid, score, json.dumps(item), sig, now))
-        con.commit()
-
-    logger.info(
-        "API personalized fresh user_id=%s generated=%s",
-        uid, len(results)
-    )
-    log_event("personalized", {"note": "fresh", "top_n": len(results)})
-
-    return jsonify({"results": results, "note": "fresh"})
+    logger.info("Personalized recommendations pending user_id=%s", uid)
+    log_event("personalized", {"note": "recommendations_pending"})
+    return jsonify({"results": [], "note": "recommendations_pending"}), 202

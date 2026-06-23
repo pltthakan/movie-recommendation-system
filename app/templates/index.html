@@ -68,7 +68,7 @@
       <h2 class="text-2xl font-bold mb-3">Yeni Filmler</h2>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {% for m in yeni.results %}
-        <a href="/movie/{{ m.id }}" class="group card-3d">
+        <a href="/movie/{{ m.id }}" data-movie-id="{{ m.id }}" data-track-source="now_playing" class="group card-3d">
           <img class="poster w-full aspect-[2/3] object-cover"
                src="https://image.tmdb.org/t/p/w500{{ m.poster_path }}" alt="{{ m.title }}">
           <div class="mt-2">
@@ -92,7 +92,7 @@
       <h2 class="text-xl font-bold mb-3">Trend Filmler</h2>
       <div class="space-y-3">
         {% for t in trend.results[:6] %}
-        <a class="flex gap-3 items-center" href="/movie/{{ t.id }}">
+        <a class="flex gap-3 items-center" href="/movie/{{ t.id }}" data-movie-id="{{ t.id }}" data-track-source="trending">
           <img class="w-12 h-12 object-cover rounded-md"
                src="https://image.tmdb.org/t/p/w185{{ t.poster_path }}">
           <div class="min-w-0">

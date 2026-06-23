@@ -30,6 +30,10 @@ def _column_exists(con, table, column):
 def init_db():
     with db() as con:
         with con.cursor() as cur:
+            # `web` and `event-worker` start concurrently in Compose. PostgreSQL
+            # does not make concurrent CREATE TABLE IF NOT EXISTS fully safe, so
+            # serialize schema initialization across processes.
+            cur.execute("SELECT pg_advisory_xact_lock(4815162342);")
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id            BIGSERIAL PRIMARY KEY,
@@ -140,9 +144,12 @@ def init_db():
             cur.execute("""
             CREATE TABLE IF NOT EXISTS user_events(
                 id         BIGSERIAL PRIMARY KEY,
+                event_id   TEXT,
+                schema_version SMALLINT NOT NULL DEFAULT 1,
                 user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
                 session_id TEXT,
                 event_type TEXT NOT NULL,
+                source     TEXT,
                 path       TEXT,
                 method     TEXT,
                 status     INTEGER,
@@ -153,6 +160,13 @@ def init_db():
                 created_at TIMESTAMPTZ NOT NULL
             );
             """)
+            if not _column_exists(con, "user_events", "event_id"):
+                cur.execute("ALTER TABLE user_events ADD COLUMN event_id TEXT;")
+            if not _column_exists(con, "user_events", "schema_version"):
+                cur.execute("ALTER TABLE user_events ADD COLUMN schema_version SMALLINT NOT NULL DEFAULT 1;")
+            if not _column_exists(con, "user_events", "source"):
+                cur.execute("ALTER TABLE user_events ADD COLUMN source TEXT;")
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_events_event_id ON user_events(event_id) WHERE event_id IS NOT NULL;")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_user_events_user ON user_events(user_id, created_at DESC);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_user_events_type ON user_events(event_type, created_at DESC);")
 
