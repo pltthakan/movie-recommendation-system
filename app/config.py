@@ -8,6 +8,8 @@ class Config:
     TMDB_BASE = "https://api.themoviedb.org/3"
     TZ = os.getenv("TZ", "Europe/Istanbul")
     AUTO_WARMUP = os.getenv("AUTO_WARMUP", "0")
+    VECTOR_RETRIEVAL_LIMIT = int(os.getenv("VECTOR_RETRIEVAL_LIMIT", "60"))
+    VECTOR_HNSW_EF_SEARCH = int(os.getenv("VECTOR_HNSW_EF_SEARCH", "400"))
     # Event pipeline. Redis Streams is used as an at-least-once delivery queue.
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     EVENT_STREAM = os.getenv("EVENT_STREAM", "movie:behavior-events")

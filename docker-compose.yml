@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.2-pg16
     environment:
       POSTGRES_DB: film_app
       POSTGRES_USER: postgres
@@ -34,6 +34,7 @@ services:
         condition: service_started
     volumes:
       - models:/models
+      - ./benchmarks:/output
     restart: unless-stopped
 
   event-worker:
@@ -53,6 +54,7 @@ services:
         condition: service_started
     volumes:
       - models:/models
+      - ./benchmarks:/output
     restart: unless-stopped
 
   redis:

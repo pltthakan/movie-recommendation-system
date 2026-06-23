@@ -253,6 +253,44 @@ The pipeline:
 * Top-N results returned
 * Cached in `user_recommendations`
 
+### Vector retrieval at scale
+
+Movie embeddings are also stored as `vector(384)` in PostgreSQL. An HNSW cosine
+index retrieves the nearest candidates; hybrid scoring and MMR rank the final
+results. Populate a larger catalog before evaluating scale:
+
+```bash
+# 500 TMDB pages is roughly 10k films; run this in the background worker container.
+docker compose exec event-worker python -m app.jobs.catalog_sync --pages 500
+
+# Synthetic, reproducible ANN latency/recall benchmark.
+docker compose exec event-worker python -m app.benchmarks.vector_search --sizes 1000,10000,50000
+```
+
+The benchmark writes `benchmarks/pgvector_hnsw.json` on the host with p50/p95 exact-search
+and HNSW latency plus Recall@10. It uses synthetic normalized vectors to measure
+retrieval infrastructure, not recommendation relevance.
+
+For a lower-resource laptop run, use `--m 16 --ef-construction 64`. Higher
+HNSW construction settings improve Recall@10 but make a 50k index build much
+more CPU and memory intensive.
+
+#### Published local benchmark
+
+Run on this development machine with 10 synthetic normalized-vector queries,
+`m=16`, `ef_construction=64`, `ef_search=400`:
+
+| Vectors | Exact cosine p50/p95 | HNSW p50/p95 | Recall@10 |
+| ---: | ---: | ---: | ---: |
+| 1,000 | 0.805 / 1.081 ms | 0.702 / 0.912 ms | 1.00 |
+| 10,000 | 2.880 / 3.229 ms | 2.752 / 3.324 ms | 1.00 |
+| 50,000 | 18.275 / 24.238 ms | 10.420 / 48.902 ms | 0.58 |
+
+The 50k result shows the actual HNSW trade-off: lower median latency but
+reduced recall using the low-resource index configuration. Production uses a
+higher-quality `m=32`, `ef_construction=128` index; benchmark it on the target
+deployment machine before selecting its final `ef_search` value.
+
 ---
 
 ## Event-Driven Behavior Pipeline

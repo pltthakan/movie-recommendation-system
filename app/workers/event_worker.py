@@ -17,6 +17,7 @@ from app.services.recommender import (
     build_user_recommendations,
     get_candidate_cache,
     get_or_build_user_profile,
+    get_vector_candidate_cache,
     invalidate_user_cache,
 )
 
@@ -41,7 +42,7 @@ def prepare_user(app, user_id: int) -> None:
     with app.app_context():
         invalidate_user_cache(user_id)
         sig, profile = get_or_build_user_profile(user_id)
-        candidates = get_candidate_cache()
+        candidates = get_vector_candidate_cache(profile) or get_candidate_cache()
         count = len(build_user_recommendations(user_id, sig, profile, candidates))
         logger.info("Prepared personalized cache user_id=%s recommendations=%s", user_id, count)
 

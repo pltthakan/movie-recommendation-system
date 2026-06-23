@@ -4,6 +4,7 @@ import time
 import threading
 import hashlib
 import numpy as np
+from flask import current_app
 from ..db import db
 from .utils import now_utc
 from .tmdb import tmdb_get
@@ -129,6 +130,16 @@ def _candidate_text(data: dict) -> str:
     return " [SEP] ".join(part for part in (title, overview, genres) if part)
 
 
+def _vector_literal(vector) -> str:
+    return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+def _parse_vector(vector) -> np.ndarray:
+    if isinstance(vector, str):
+        return np.fromstring(vector.strip().strip("[]"), sep=",", dtype=np.float32)
+    return np.asarray(vector, dtype=np.float32)
+
+
 def get_candidate_cache(force: bool = False, limit: int = CANDIDATE_LIMIT):
     global _mem_cand
     with _mem_lock:
@@ -166,6 +177,32 @@ def get_ready_candidate_cache(limit: int = CANDIDATE_LIMIT):
             return None
         _mem_cand = cache
         return cache
+
+
+def get_vector_candidate_cache(user_vec, limit: int | None = None):
+    """Retrieve nearest movie vectors in PostgreSQL through the HNSW index."""
+    if user_vec is None:
+        return None
+    limit = limit or current_app.config["VECTOR_RETRIEVAL_LIMIT"]
+    vector_literal = _vector_literal(user_vec)
+    with db() as con, con.cursor() as cur:
+        cur.execute("SELECT set_config('hnsw.ef_search', %s, true);", (str(current_app.config["VECTOR_HNSW_EF_SEARCH"]),))
+        cur.execute(
+            """
+            SELECT me.movie_id, cm.data, me.embedding_vector
+            FROM movie_embeddings me
+            JOIN candidate_movies cm ON cm.movie_id=me.movie_id
+            WHERE me.embedding_vector IS NOT NULL
+            ORDER BY me.embedding_vector <=> %s::vector
+            LIMIT %s
+            """,
+            (vector_literal, limit),
+        )
+        rows = cur.fetchall()
+    if not rows:
+        return None
+    emb_map = {row["movie_id"]: _parse_vector(row["embedding_vector"]) for row in rows}
+    return _candidate_cache_from_rows(rows, emb_map)
 
 def get_or_build_user_profile(uid: int):
     sig = user_signals_hash(uid)
@@ -250,13 +287,14 @@ def get_or_build_user_profile(uid: int):
     with db() as con, con.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO user_profiles(user_id, signals_hash, embedding, updated_at)
-            VALUES (%s, %s, %s, %s) ON CONFLICT (user_id)
+            INSERT INTO user_profiles(user_id, signals_hash, embedding, embedding_vector, updated_at)
+            VALUES (%s, %s, %s, %s::vector, %s) ON CONFLICT (user_id)
             DO UPDATE SET signals_hash=EXCLUDED.signals_hash,
                 embedding=EXCLUDED.embedding,
+                embedding_vector=EXCLUDED.embedding_vector,
                 updated_at=EXCLUDED.updated_at
             """,
-            (uid, sig, json.dumps(user_vec.tolist()), now_utc()),
+            (uid, sig, json.dumps(user_vec.tolist()), _vector_literal(user_vec), now_utc()),
         )
         con.commit()
 
