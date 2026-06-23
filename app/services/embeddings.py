@@ -66,16 +66,18 @@ def ensure_embeddings(movie_ids, text_overrides=None):
             vecs = embed_texts(texts)
             with con.cursor() as cur:
                 for (mid, h, _text), vec in zip(need, vecs):
+                    vector_literal = "[" + ",".join(str(float(value)) for value in vec) + "]"
                     cur.execute(
                         """
-                        INSERT INTO movie_embeddings(movie_id, text_hash, embedding, updated_at)
-                        VALUES (%s,%s,%s,%s)
+                        INSERT INTO movie_embeddings(movie_id, text_hash, embedding, embedding_vector, updated_at)
+                        VALUES (%s,%s,%s,%s::vector,%s)
                         ON CONFLICT (movie_id)
                         DO UPDATE SET text_hash=EXCLUDED.text_hash,
                                       embedding=EXCLUDED.embedding,
+                                      embedding_vector=EXCLUDED.embedding_vector,
                                       updated_at=EXCLUDED.updated_at
                         """,
-                        (mid, h, json.dumps(vec.tolist()), now_utc()),
+                        (mid, h, json.dumps(vec.tolist()), vector_literal, now_utc()),
                     )
             con.commit()
 

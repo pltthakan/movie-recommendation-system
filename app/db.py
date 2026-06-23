@@ -27,6 +27,11 @@ def _column_exists(con, table, column):
         """, (table, column))
         return cur.fetchone() is not None
 
+def _index_exists(con, index_name):
+    with con.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s) IS NOT NULL AS exists", (index_name,))
+        return bool(cur.fetchone()["exists"])
+
 def init_db():
     with db() as con:
         with con.cursor() as cur:
@@ -34,6 +39,7 @@ def init_db():
             # does not make concurrent CREATE TABLE IF NOT EXISTS fully safe, so
             # serialize schema initialization across processes.
             cur.execute("SELECT pg_advisory_xact_lock(4815162342);")
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id            BIGSERIAL PRIMARY KEY,
@@ -98,6 +104,7 @@ def init_db():
                 movie_id   INTEGER PRIMARY KEY,
                 text_hash  TEXT,
                 embedding  JSONB,
+                embedding_vector vector(384),
                 updated_at TIMESTAMPTZ
             );
             """)
@@ -105,6 +112,8 @@ def init_db():
                 cur.execute("ALTER TABLE movie_embeddings ADD COLUMN text_hash TEXT;")
             if not _column_exists(con, "movie_embeddings", "updated_at"):
                 cur.execute("ALTER TABLE movie_embeddings ADD COLUMN updated_at TIMESTAMPTZ;")
+            if not _column_exists(con, "movie_embeddings", "embedding_vector"):
+                cur.execute("ALTER TABLE movie_embeddings ADD COLUMN embedding_vector vector(384);")
 
             cur.execute("""
             CREATE TABLE IF NOT EXISTS candidate_movies(
@@ -119,9 +128,12 @@ def init_db():
                 user_id      BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 signals_hash TEXT NOT NULL,
                 embedding    JSONB NOT NULL,
+                embedding_vector vector(384),
                 updated_at   TIMESTAMPTZ NOT NULL
             );
             """)
+            if not _column_exists(con, "user_profiles", "embedding_vector"):
+                cur.execute("ALTER TABLE user_profiles ADD COLUMN embedding_vector vector(384);")
 
             cur.execute("""
             CREATE TABLE IF NOT EXISTS user_recommendations(
@@ -169,5 +181,25 @@ def init_db():
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_events_event_id ON user_events(event_id) WHERE event_id IS NOT NULL;")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_user_events_user ON user_events(user_id, created_at DESC);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_user_events_type ON user_events(event_type, created_at DESC);")
+
+            # Migrate existing JSONB vectors incrementally, then enable ANN
+            # cosine search. JSONB remains temporarily for backwards safety.
+            cur.execute("""
+                UPDATE movie_embeddings
+                SET embedding_vector=embedding::text::vector
+                WHERE embedding_vector IS NULL AND embedding IS NOT NULL
+            """)
+            cur.execute("""
+                UPDATE user_profiles
+                SET embedding_vector=embedding::text::vector
+                WHERE embedding_vector IS NULL AND embedding IS NOT NULL
+            """)
+            if not _index_exists(con, "idx_movie_embeddings_hnsw_cosine_v2"):
+                cur.execute("DROP INDEX IF EXISTS idx_movie_embeddings_hnsw_cosine;")
+                cur.execute("""
+                    CREATE INDEX idx_movie_embeddings_hnsw_cosine_v2
+                    ON movie_embeddings USING hnsw (embedding_vector vector_cosine_ops)
+                    WITH (m=32, ef_construction=128)
+                """)
 
         con.commit()

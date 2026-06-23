@@ -1,0 +1,56 @@
+[
+  {
+    "vectors": 1000,
+    "queries": 10,
+    "hnsw": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 400
+    },
+    "exact_ms": {
+      "p50": 0.805,
+      "p95": 1.081
+    },
+    "hnsw_ms": {
+      "p50": 0.702,
+      "p95": 0.912
+    },
+    "recall_at_10": 1.0
+  },
+  {
+    "vectors": 10000,
+    "queries": 10,
+    "hnsw": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 400
+    },
+    "exact_ms": {
+      "p50": 2.88,
+      "p95": 3.229
+    },
+    "hnsw_ms": {
+      "p50": 2.752,
+      "p95": 3.324
+    },
+    "recall_at_10": 1.0
+  },
+  {
+    "vectors": 50000,
+    "queries": 10,
+    "hnsw": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 400
+    },
+    "exact_ms": {
+      "p50": 18.275,
+      "p95": 24.238
+    },
+    "hnsw_ms": {
+      "p50": 10.42,
+      "p95": 48.902
+    },
+    "recall_at_10": 0.58
+  }
+]
