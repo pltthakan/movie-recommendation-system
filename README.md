@@ -247,7 +247,8 @@ The pipeline:
 
 ### 4. Scoring
 
-* Score = cosine similarity (dot product)
+* Hybrid score = semantic similarity + collaborative overlap + global engagement + TMDB quality
+* MMR re-ranking diversifies the final list and suppresses near-duplicate films
 * Already seen movies are filtered out
 * Top-N results returned
 * Cached in `user_recommendations`
