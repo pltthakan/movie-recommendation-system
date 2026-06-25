@@ -5,6 +5,12 @@
 **Tech Stack:** Flask + PostgreSQL + TMDB API + Embedding-based Recommendation
 **Deployment:** Docker Compose (web + db)
 
+
+<img width="1323" height="764" alt="Ekran Resmi 2026-06-25 16 57 11" src="https://github.com/user-attachments/assets/d7e7e734-136e-4f78-82ef-8dd1d3357339" />
+<img width="1323" height="777" alt="Ekran Resmi 2026-06-25 16 57 44" src="https://github.com/user-attachments/assets/ed564bce-db2a-4886-86f9-a85fb689e612" />
+
+
+
 ---
 
 ## TMDB credentials
